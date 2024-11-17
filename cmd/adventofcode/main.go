@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,7 +13,7 @@ import (
 
 const (
 	minYear = 2015
-	maxYear = 2023
+	maxYear = 2024
 	minDay  = 1
 	maxDay  = 25
 )
@@ -33,23 +34,23 @@ func main() {
 
 	year, err := strconv.Atoi(os.Args[1])
 	if err != nil {
-		fmt.Printf("Error: invalid year argument: %v\n", os.Args[1])
+		fmt.Printf("Error: Invalid year argument: %v\n", os.Args[1])
 		os.Exit(1)
 	}
 
 	if year < minYear || year > maxYear {
-		fmt.Printf("Error: year must be between %d and %d\n", minYear, maxYear)
+		fmt.Printf("Error: Year must be between %d and %d\n", minYear, maxYear)
 		os.Exit(1)
 	}
 
 	day, err := strconv.Atoi(os.Args[2])
 	if err != nil {
-		fmt.Printf("Error: invalid day argument: %v\n", os.Args[2])
+		fmt.Printf("Error: Invalid day argument: %v\n", os.Args[2])
 		os.Exit(1)
 	}
 
 	if day < minDay || day > maxDay {
-		fmt.Printf("Error: day must be between %d and %d\n", minDay, maxDay)
+		fmt.Printf("Error: Day must be between %d and %d\n", minDay, maxDay)
 		os.Exit(1)
 	}
 
@@ -67,7 +68,7 @@ func main() {
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://adventofcode.com/%d/day/%d/input", year, day), nil)
 	if err != nil {
-		fmt.Printf("Error: failed to create HTTP request: %s", err)
+		fmt.Printf("Error: Failed to create HTTP request: %s", err)
 		os.Exit(1)
 	}
 
@@ -75,18 +76,26 @@ func main() {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Error: failed to make a request: %s\n", err)
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			fmt.Printf("Error: The request exceeded time out of %.1f seconds.\n", client.Timeout.Seconds())
+		} else {
+			fmt.Printf("Error: Failed to make a request: %s\n", err)
+		}
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	// Handle response status code
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusBadRequest {
+		switch resp.StatusCode {
+		case http.StatusBadRequest:
 			fmt.Printf("Error: AOC_SESSION is expired.\n")
 			os.Exit(1)
-		} else {
-			fmt.Printf("Error: unexpected status code: %d\n", resp.StatusCode)
+		case http.StatusNotFound:
+			fmt.Printf("Error: Required input not found. The puzzle may not be available yet.\n")
+			os.Exit(1)
+		default:
+			fmt.Printf("Error: Unexpected status code: %d\n", resp.StatusCode)
 			os.Exit(1)
 		}
 	}
@@ -95,14 +104,14 @@ func main() {
 	filename := fmt.Sprintf("aoc_%d_%d.txt", year, day)
 	file, err := os.Create(filename)
 	if err != nil {
-		fmt.Printf("Error: failed to create input file: %v\n", err)
+		fmt.Printf("Error: Failed to create input file: %v\n", err)
 		os.Exit(1)
 	}
 	defer file.Close()
 
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		fmt.Printf("Error: failed to write response to input file: %v\n", err)
+		fmt.Printf("Error: Failed to write response to input file: %v\n", err)
 		os.Exit(1)
 	}
 
